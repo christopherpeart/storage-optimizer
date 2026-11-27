@@ -10,7 +10,8 @@ scanned or sent to the AI.
 ## Features
 
 - **Works with any LLM.** Use any OpenAI-compatible API (OpenAI, OpenRouter, Groq, Gemini, Mistral,
-  Ollama, LM Studio...) or Claude through the official Anthropic SDK.
+  Ollama, LM Studio...), Claude through the official Anthropic SDK, or **your Claude Code login**
+  through the Claude Agent SDK (no API key needed).
 - **Privacy first.** Only a short, redacted list of large items is shared. See [Privacy](#privacy).
 - **Advice you can act on.** Each recommendation says whether to `delete` the item, `uninstall` it,
   or clear it with the owning app (`clear_with_tool`, e.g. `docker system prune`), and gives a risk
@@ -22,7 +23,8 @@ scanned or sent to the AI.
 ## Requirements
 
 - Python 3.9+
-- For Claude: `pip install anthropic`
+- For Claude via API key: `pip install anthropic`
+- For Claude via your Claude Code login: `pip install claude-agent-sdk`
 - For `--clean`: `pip install send2trash`
 
 ## Setup
@@ -49,6 +51,23 @@ scanned or sent to the AI.
 `.env` is git-ignored, so your real key is never committed. `env.txt` is only the template.
 Don't put a real key in it.
 
+### Using Claude Code instead of an API key
+
+If you have Claude Code and are logged in (run `claude` once to sign in), you can skip the API key:
+
+```sh
+pip install claude-agent-sdk
+python storage_optimizer.py --provider claude-code
+```
+
+This sends the request through the Claude Agent SDK using your Claude Code login and its default
+model. Pass `--model` to choose another one. The SDK ships with its own copy of Claude Code; to use a
+particular installation instead, pass `--claude-path` or set `CLAUDE_CODE_PATH`.
+
+Claude Code runs with **all tools disabled** and without your personal settings, plugins or MCP
+servers. It can't read files or run commands, so it only sees the same redacted list as any other
+provider.
+
 ## Usage
 
 ```sh
@@ -72,8 +91,9 @@ python storage_optimizer.py --roots C:\ D:\ --privacy strict --clean
 
 | Option | Default | Description |
 |---|---|---|
-| `--provider` | `openai` | `openai` (any OpenAI-compatible API) or `anthropic` |
-| `--model` | `gpt-5` / `claude-opus-5-5` | Model name |
+| `--provider` | `openai` | `openai` (any OpenAI-compatible API), `anthropic`, or `claude-code` |
+| `--model` | `gpt-5` / `claude-opus-5-5` / Claude Code default | Model name |
+| `--claude-path` | found by the SDK | `claude-code` only: path to a specific `claude` executable |
 | `--base-url` | provider default | API endpoint |
 | `--roots` | all fixed drives (or `/`) | Folders or drives to scan |
 | `--min-gb` | `0.5` | Ignore items smaller than this |

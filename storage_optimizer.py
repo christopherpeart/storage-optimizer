@@ -23,10 +23,13 @@ never from the command line):
   Anthropic (pip install anthropic):
       set ANTHROPIC_API_KEY=...      (or LLM_API_KEY)
       python storage_optimizer.py --provider anthropic
+  Claude Code (pip install claude-agent-sdk) - uses your Claude Code login, no API key:
+      python storage_optimizer.py --provider claude-code
 
 Options: --roots C:\\ D:\\   --min-gb 0.5   --max-items 250   --privacy strict
-         --show-payload   --demo (print the full LLM messages, send nothing)   --yes (skip send confirmation)   --clean (interactively
-         move "delete" recommendations to the Recycle Bin; needs: pip install send2trash)
+         --show-payload   --demo (print the full LLM messages, send nothing)
+         --yes (skip send confirmation)   --claude-path (specific claude executable)
+         --clean (interactively move "delete" recommendations to the Recycle Bin; needs: pip install send2trash)
 """
 import argparse
 import getpass
@@ -147,6 +150,31 @@ def redact(path, is_file, strict):
 
 
 def ask_llm(args, key, user_msg):
+    if args.provider == "claude-code":
+        # Runs through Claude Code (pip install claude-agent-sdk) using your existing Claude Code login - no API key.
+        # tools=[] means the agent cannot read files or run commands: it only sees the redacted list, like any provider.
+        import asyncio
+        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKError, CLINotFoundError, ResultMessage, query
+        opts = ClaudeAgentOptions(system_prompt=SYSTEM_PROMPT, tools=[], setting_sources=[], mcp_servers={},
+                                  strict_mcp_config=True, max_turns=1, model=args.model, cli_path=args.claude_path)
+
+        async def run():
+            result = None
+            async for msg in query(prompt=user_msg, options=opts):  # let the stream finish so the SDK closes cleanly
+                if isinstance(msg, ResultMessage):
+                    result = msg
+            return result
+        login_hint = "If it says 'Not logged in', sign in once by running `claude` in a terminal and typing /login."
+        try:
+            result = asyncio.run(run())
+        except CLINotFoundError:
+            sys.exit("Claude Code not found. Install it or pass --claude-path to claude.exe.")
+        except ClaudeSDKError as e:
+            sys.exit(f"Claude Code error: {e}\n{login_hint}")
+        if result is None or result.is_error:
+            sys.exit(f"Claude Code error: {result and (result.result or result.errors)}\n{login_hint}")
+        return result.result or ""
+
     if args.provider == "anthropic":
         import anthropic  # pip install anthropic
         client = anthropic.Anthropic(api_key=key or None, base_url=args.base_url or None)
@@ -185,10 +213,14 @@ def main():
                     os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
 
     ap = argparse.ArgumentParser(description="AI-powered storage optimizer", epilog="See module docstring for setup.")
-    ap.add_argument("--provider", choices=["openai", "anthropic"], default=os.getenv("LLM_PROVIDER", "openai"),
-                    help="'openai' = any OpenAI-compatible /chat/completions API (default)")
+    ap.add_argument("--provider", choices=["openai", "anthropic", "claude-code"],
+                    default=os.getenv("LLM_PROVIDER", "openai"),
+                    help="'openai' = any OpenAI-compatible /chat/completions API (default); "
+                         "'claude-code' = your Claude Code login via the Claude Agent SDK (no API key)")
     ap.add_argument("--model", default=os.getenv("LLM_MODEL"))
     ap.add_argument("--base-url", default=os.getenv("LLM_BASE_URL"))
+    ap.add_argument("--claude-path", default=os.getenv("CLAUDE_CODE_PATH"),
+                    help="claude-code provider: path to a specific claude executable (default: the SDK finds one)")
     ap.add_argument("--roots", nargs="+", help="folders/drives to scan (default: all fixed drives, or /)")
     ap.add_argument("--min-gb", type=float, default=0.5, help="ignore items smaller than this")
     ap.add_argument("--max-items", type=int, default=250, help="max items sent to the LLM")
@@ -199,7 +231,8 @@ def main():
     ap.add_argument("--yes", action="store_true", help="don't ask before sending to the LLM")
     ap.add_argument("--clean", action="store_true", help="interactively move 'delete' items to the Recycle Bin")
     args = ap.parse_args()
-    args.model = args.model or ("claude-opus-5-5" if args.provider == "anthropic" else "gpt-5")
+    if args.provider != "claude-code":  # claude-code uses your Claude Code default model unless --model is given
+        args.model = args.model or ("claude-opus-5-5" if args.provider == "anthropic" else "gpt-5")
     if args.provider == "openai" and not args.base_url:
         args.base_url = "https://api.openai.com/v1"
 
@@ -235,17 +268,19 @@ def main():
         print(json.dumps(payload, indent=1))
         return
 
-    host = "api.anthropic.com" if args.provider == "anthropic" and not args.base_url \
+    host = "Claude Code (your Claude login)" if args.provider == "claude-code" \
+        else "api.anthropic.com" if args.provider == "anthropic" and not args.base_url \
         else urllib.parse.urlparse(args.base_url).netloc
+    model_name = args.model or "your Claude Code default model"
     if args.demo:  # the exact messages the LLM would receive; nothing is sent and no API key is needed
-        print(f"\n=== DEMO: request that would be sent to {host} (provider={args.provider}, model={args.model}) ===\n"
+        print(f"\n=== DEMO: request that would be sent to {host} (provider={args.provider}, model={model_name}) ===\n"
               f"\n--- system message ---\n{SYSTEM_PROMPT}\n\n--- user message ({len(user_msg):,} bytes) ---\n{user_msg}\n"
               f"\n=== Nothing was sent. ===")
         return
     if args.base_url and args.base_url.startswith("http://") and not host.split(":")[0] in ("localhost", "127.0.0.1"):
         print("WARNING: base URL is not HTTPS - data and API key would be sent unencrypted.")
     if not args.yes and input(f"Send {len(payload)} redacted entries ({len(user_msg):,} bytes, privacy={args.privacy})"
-                              f" to {host} ({args.model})? Use --show-payload to inspect. [y/N] ").lower() != "y":
+                              f" to {host} ({model_name})? Use --demo to inspect. [y/N] ").lower() != "y":
         return
 
     key = os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY" if args.provider == "anthropic" else "OPENAI_API_KEY")
