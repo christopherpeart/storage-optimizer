@@ -27,7 +27,14 @@ scanned or sent to the AI.
 
 ## Setup
 
-1. Edit `.env` (next to the script) and fill in your provider and key. It ships with dummy values:
+1. Copy the template `env.txt` to `.env` (next to the script):
+
+   ```sh
+   copy env.txt .env      # Windows
+   cp env.txt .env        # macOS / Linux
+   ```
+
+2. Fill in your provider and key in `.env`:
 
    ```ini
    LLM_PROVIDER=anthropic
@@ -39,12 +46,8 @@ scanned or sent to the AI.
    You can also set these as ordinary environment variables, which override `.env`.
    `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are also recognised.
 
-2. **Don't commit a real key.** The `.env` in this repo is a placeholder. After you add your key,
-   stop git from tracking your local changes:
-
-   ```sh
-   git update-index --skip-worktree .env
-   ```
+`.env` is git-ignored, so your real key is never committed. `env.txt` is only the template.
+Don't put a real key in it.
 
 ## Usage
 
