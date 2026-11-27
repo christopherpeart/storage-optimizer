@@ -25,7 +25,7 @@ never from the command line):
       python storage_optimizer.py --provider anthropic
 
 Options: --roots C:\\ D:\\   --min-gb 0.5   --max-items 250   --privacy strict
-         --show-payload   --yes (skip send confirmation)   --clean (interactively
+         --show-payload   --demo (print the full LLM messages, send nothing)   --yes (skip send confirmation)   --clean (interactively
          move "delete" recommendations to the Recycle Bin; needs: pip install send2trash)
 """
 import argparse
@@ -193,7 +193,9 @@ def main():
     ap.add_argument("--min-gb", type=float, default=0.5, help="ignore items smaller than this")
     ap.add_argument("--max-items", type=int, default=250, help="max items sent to the LLM")
     ap.add_argument("--privacy", choices=["balanced", "strict"], default="balanced")
-    ap.add_argument("--show-payload", action="store_true", help="print what would be sent and exit")
+    ap.add_argument("--show-payload", action="store_true", help="print the redacted item list and exit")
+    ap.add_argument("--demo", action="store_true",
+                    help="print the exact system + user messages the LLM would receive, then exit without sending")
     ap.add_argument("--yes", action="store_true", help="don't ask before sending to the LLM")
     ap.add_argument("--clean", action="store_true", help="interactively move 'delete' items to the Recycle Bin")
     args = ap.parse_args()
@@ -235,6 +237,11 @@ def main():
 
     host = "api.anthropic.com" if args.provider == "anthropic" and not args.base_url \
         else urllib.parse.urlparse(args.base_url).netloc
+    if args.demo:  # the exact messages the LLM would receive; nothing is sent and no API key is needed
+        print(f"\n=== DEMO: request that would be sent to {host} (provider={args.provider}, model={args.model}) ===\n"
+              f"\n--- system message ---\n{SYSTEM_PROMPT}\n\n--- user message ({len(user_msg):,} bytes) ---\n{user_msg}\n"
+              f"\n=== Nothing was sent. ===")
+        return
     if args.base_url and args.base_url.startswith("http://") and not host.split(":")[0] in ("localhost", "127.0.0.1"):
         print("WARNING: base URL is not HTTPS - data and API key would be sent unencrypted.")
     if not args.yes and input(f"Send {len(payload)} redacted entries ({len(user_msg):,} bytes, privacy={args.privacy})"

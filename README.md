@@ -55,6 +55,9 @@ Don't put a real key in it.
 # Check exactly what would be sent to the AI. Nothing is sent.
 python storage_optimizer.py --show-payload
 
+# Print the full request (system prompt + data) the LLM would receive. Nothing is sent.
+python storage_optimizer.py --demo
+
 # Run with the settings from .env
 python storage_optimizer.py
 
@@ -77,6 +80,7 @@ python storage_optimizer.py --roots C:\ D:\ --privacy strict --clean
 | `--max-items` | `250` | Maximum number of items sent to the AI |
 | `--privacy` | `balanced` | `balanced` or `strict` (see below) |
 | `--show-payload` | | Print the redacted payload and exit without contacting the AI |
+| `--demo` | | Print the exact system and user messages the LLM would receive, then exit. Nothing is sent and no API key is needed |
 | `--yes` | | Skip the confirmation before sending |
 | `--clean` | | Interactively move `delete` recommendations to the Recycle Bin |
 
